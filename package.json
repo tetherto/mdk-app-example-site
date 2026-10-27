@@ -15,7 +15,8 @@
     "start": "node start.js",
     "stop:pm2": "pm2 delete deploy/ecosystem.config.js",
     "lint": "standard",
-    "test:unit": "NODE_ENV=test brittle tests/unit/git-deps.test.js tests/unit/pool-adapter.test.js tests/unit/pools-controller.test.js tests/unit/start-roles.test.js tests/unit/site-tools-contract.test.js tests/unit/site-tools-results.test.js",
+    "test:unit": "NODE_ENV=test brittle tests/unit/git-deps.test.js tests/unit/pool-adapter.test.js tests/unit/pools-controller.test.js tests/unit/start-roles.test.js tests/unit/site-lib.test.js tests/unit/site-tools-contract.test.js tests/unit/site-tools-results.test.js",
+    "test:coverage": "NODE_ENV=test brittle --coverage tests/unit/git-deps.test.js tests/unit/pool-adapter.test.js tests/unit/pools-controller.test.js tests/unit/start-roles.test.js tests/unit/site-lib.test.js tests/unit/site-tools-contract.test.js tests/unit/site-tools-results.test.js",
     "test": "npm run test:unit"
   },
   "dependencies": {

@@ -1,4 +1,6 @@
 node_modules/
+coverage/
+.nyc_output/
 .site-data/
 store/
 ui/dist/
