@@ -1,0 +1,18 @@
+{
+  "miners": [
+    {"info": { "serialNum": "WM-001", "container": "rack-1" }, "opts": { "address": "127.0.0.1", "port": null, "password": "admin" }},
+    {"info": { "serialNum": "WM-002", "container": "rack-1" }, "opts": { "address": "127.0.0.1", "port": null, "password": "admin" }},
+    {"info": { "serialNum": "WM-003", "container": "rack-1" }, "opts": { "address": "127.0.0.1", "port": null, "password": "admin" }},
+    {"info": { "serialNum": "WM-004", "container": "rack-1" }, "opts": { "address": "127.0.0.1", "port": null, "password": "admin" }},
+    {"info": { "serialNum": "WM-005", "container": "rack-1" }, "opts": { "address": "127.0.0.1", "port": null, "password": "admin" }}
+  ],
+  "antminers": [
+    {"info": { "serialNum": "AM-001", "container": "rack-1" }, "opts": { "address": "127.0.0.1", "port": null, "username": "root", "password": "admin" }},
+    {"info": { "serialNum": "AM-002", "container": "rack-1" }, "opts": { "address": "127.0.0.1", "port": null, "username": "root", "password": "admin" }},
+    {"info": { "serialNum": "AM-003", "container": "rack-1" }, "opts": { "address": "127.0.0.1", "port": null, "username": "root", "password": "admin" }}
+  ],
+  "sealminers": [
+    {"info": { "serialNum": "SM-001", "container": "rack-1" }, "opts": { "address": "127.0.0.1", "port": null }},
+    {"info": { "serialNum": "SM-002", "container": "rack-1" }, "opts": { "address": "127.0.0.1", "port": null }}
+  ]
+}

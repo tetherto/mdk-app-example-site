@@ -1,0 +1,106 @@
+{
+  "root": ".site-data",
+  "host": "127.0.0.1",
+  "discovery": "local",
+  "worker": {
+    "id": "whatsminer-m56s-telemetry-flow",
+    "model": "m56s",
+    "allowDuplicateIPs": true,
+    "pools": [
+      { "url": "stratum+tcp://btc.example-pool.com:3333", "worker_name": "account.worker", "worker_password": "x" }
+    ],
+    "thing": {
+      "collectSnapsItvMs": 30000,
+      "storeSnapItvMs": 30000
+    }
+  },
+  "mocks": {
+    "type": "m56s",
+    "portBase": 14031,
+    "defaultPassword": "admin"
+  },
+  "antminer": {
+    "worker": {
+      "id": "antminer-s21-telemetry-flow",
+      "type": "miner-am-s21"
+    },
+    "mocks": {
+      "portBase": 16080,
+      "defaultPassword": "admin"
+    }
+  },
+  "sealminer": {
+    "worker": {
+      "id": "sealminer-a2-telemetry-flow",
+      "series": "A2"
+    },
+    "mocks": {
+      "portBase": 17028,
+      "firmware": "2026060901"
+    }
+  },
+  "emcd": {
+    "worker": {
+      "id": "emcd-pool-worker",
+      "rack": "site-1",
+      "tickMs": 10000
+    },
+    "pool": {
+      "apiUrl": "http://127.0.0.1:5065/pool/v1",
+      "accounts": []
+    },
+    "mock": {
+      "port": 5065
+    }
+  },
+  "spiderpool": {
+    "worker": {
+      "id": "spiderpool-pool-worker",
+      "rack": "site-1",
+      "tickMs": 10000
+    },
+    "pool": {
+      "apiUrl": "http://127.0.0.1:5066",
+      "accounts": ["spider-test"]
+    },
+    "mock": {
+      "port": 5066
+    }
+  },
+  "foundry": {
+    "worker": {
+      "id": "foundry-pool-worker",
+      "rack": "site-1",
+      "tickMs": 10000
+    },
+    "pool": {
+      "apiUrl": "http://127.0.0.1:5067",
+      "accounts": ["test"]
+    },
+    "mock": {
+      "port": 5067
+    }
+  },
+  "gateway": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "allowedHosts": [],
+    "authVerifier": "loopback",
+    "pluginDirs": ["backend/apps/site"],
+    "staticRootPath": "ui/dist"
+  },
+  "mcp": {
+    "agentTools": {
+      "port": 3101,
+      "pluginDirs": ["backend/mcp-plugins/site"]
+    }
+  },
+  "pm2": {
+    "script": "deploy/run-process.js",
+    "exec_mode": "fork",
+    "instances": 1,
+    "autorestart": true,
+    "restart_delay": 2000,
+    "roles": ["mocks", "mocks-antminer", "mocks-sealminer", "mocks-emcd", "mocks-spiderpool", "mocks-foundry", "kernel", "worker", "worker-antminer", "worker-sealminer", "worker-emcd", "worker-spiderpool", "worker-foundry", "app-site", "gateway", "mcp"]
+  }
+}

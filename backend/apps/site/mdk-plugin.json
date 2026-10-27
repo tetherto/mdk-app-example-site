@@ -1,0 +1,131 @@
+{
+  "name": "@tetherto/mdk-plugin-mvp-site",
+  "version": "0.0.1",
+  "description": "MVP-site example plugin: aggregates the site (miners, a powermeter, a mining pool) via the MDK protocol client over the RPC listener.",
+  "routes": [
+    {
+      "id": "site.overview",
+      "handler": "./controllers/overview.js",
+      "auth": false,
+      "http": {
+        "method": "GET",
+        "path": "/site/overview",
+        "responses": {
+          "200": {
+            "description": "Live site snapshot: miners, site power, and pools.",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      },
+      "description": "Live site snapshot assembled from telemetry.pull across all workers: all miners, site power consumption from powermeters, and pool data from all minerpool workers.",
+      "errors": ["ERR_MDK_CLIENT_UNAVAILABLE"],
+      "safety": "read-only"
+    },
+    {
+      "id": "site.history",
+      "handler": "./controllers/history.js",
+      "auth": false,
+      "http": {
+        "method": "GET",
+        "path": "/site/history",
+        "parameters": [
+          { "in": "query", "name": "metric", "required": false, "schema": { "type": "string", "enum": ["hashrate", "site-hashrate", "power", "temperature"] } },
+          { "in": "query", "name": "deviceId", "required": false, "schema": { "type": "string" } },
+          { "in": "query", "name": "start", "required": false, "schema": { "type": "integer", "minimum": 0 } },
+          { "in": "query", "name": "end", "required": false, "schema": { "type": "integer", "minimum": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Historical time-series read from a worker tail-log.",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      },
+      "description": "Historical telemetry from the workers' persisted tail-logs (telemetry.pull type 'logs'). metric=hashrate reads pool stats-history (all pools summed by default; pass deviceId for one pool). metric=site-hashrate reads the miners' own snap tail-logs summed across all miners (MH/s; pass deviceId for one miner). metric=power reads site powermeter series (all meters summed by default; pass deviceId for one meter). metric=temperature reads sensor tail-logs, averaged by default; this example ships no sensor Worker, so it returns empty unless one is added. Defaults to the last hour.",
+      "errors": ["ERR_MDK_CLIENT_UNAVAILABLE", "ERR_UNKNOWN_METRIC", "ERR_INVALID_DATE_RANGE", "ERR_UNKNOWN_DEVICE_ID"],
+      "safety": "read-only"
+    },
+    {
+      "id": "site.miner-command",
+      "handler": "./controllers/command.js",
+      "auth": false,
+      "http": {
+        "method": "POST",
+        "path": "/site/miners/{deviceId}/command",
+        "parameters": [
+          { "in": "path", "name": "deviceId", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["mode"],
+                "properties": { "mode": { "type": "string", "enum": ["low", "normal", "high", "high_performance"] } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Command dispatched to the miner via Kernel.",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      },
+      "description": "Dispatches the setPowerMode capability command to a single miner through Kernel. The new mode appears on the next telemetry poll.",
+      "constraints": ["mode must be one of low | normal | high."],
+      "errors": ["ERR_MDK_CLIENT_UNAVAILABLE", "ERR_DEVICE_ID_REQUIRED", "ERR_INVALID_POWER_MODE"],
+      "safety": "write"
+    },
+    {
+      "id": "site.miner-pools",
+      "handler": "./controllers/pools.js",
+      "auth": false,
+      "http": {
+        "method": "POST",
+        "path": "/site/miners/{deviceId}/pools",
+        "parameters": [
+          { "in": "path", "name": "deviceId", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pools": {
+                    "type": "array",
+                    "maxItems": 3,
+                    "items": {
+                      "type": "object",
+                      "required": ["url", "worker_name"],
+                      "properties": {
+                        "url": { "type": "string" },
+                        "worker_name": { "type": "string" },
+                        "worker_password": { "type": "string" }
+                      }
+                    }
+                  },
+                  "appendId": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "setupPools command dispatched to the miner via Kernel.",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      },
+      "description": "Dispatches the setupPools capability command to a single miner through Kernel. Pools from the request body take precedence; with no body the site-wide default from config/site.deploy.json (worker.pools) is applied. The miner reboots to pick up the new pools, so expect it to drop offline briefly.",
+      "constraints": ["At most 3 pools per miner (whatsminer API limit).", "Each pool needs url and worker_name; appendId=false disables the per-device worker-name suffix."],
+      "errors": ["ERR_MDK_CLIENT_UNAVAILABLE", "ERR_DEVICE_ID_REQUIRED", "ERR_INVALID_POOLS"],
+      "safety": "write"
+    }
+  ]
+}

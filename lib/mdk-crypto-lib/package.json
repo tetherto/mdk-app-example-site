@@ -1,0 +1,10 @@
+{
+  "name": "mdk-crypto-lib",
+  "version": "4.2.0",
+  "private": true,
+  "description": "Node crypto stand-in for crypto-js. Covers the AES-256-ECB and SHA-256 surface that whatsminer-mdk-worker requires.",
+  "main": "index.js",
+  "engines": {
+    "node": ">=24"
+  }
+}
