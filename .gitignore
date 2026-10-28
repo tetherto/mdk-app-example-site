@@ -1,0 +1,13 @@
+node_modules/
+coverage/
+.nyc_output/
+.site-data/
+store/
+ui/dist/
+deploy/ecosystem.config.js
+!config/*.json.example
+config/*.json
+!config/facs/*.json.example
+config/facs/*.json
+.mcp.json
+.claude
