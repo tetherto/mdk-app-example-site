@@ -1,0 +1,13 @@
+/*
+ * Host overrides for the installed apps' pages.
+ *
+ * The Operation Center frames every page with its own site stats strip
+ * (miners, hashrate, consumption, efficiency) because, inside the MDK
+ * dashboard, an app cannot add to the host header. This site's header already
+ * shows the same figures, so the strip is hidden here. Its error card (shown
+ * in place of the strip when the summary fails) is a different element and
+ * stays visible.
+ */
+.op-centre-lite-page > .mdk-header-stats-bar {
+  display: none;
+}

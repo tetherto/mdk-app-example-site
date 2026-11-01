@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { getHashrateString } from "@tetherto/mdk-react-devkit/domain";
 import { Typography } from "@tetherto/mdk-react-devkit/primitives";
 
+import { formatTempC } from "./ContainersPage";
 import type { Container, Miner } from "./types";
 import { groupByPdu } from "./utils";
 
@@ -14,7 +15,7 @@ export function ContainerGrid({ container, miners }: { container: Container; min
         {container.id} · {container.operatingStatus} · {miners.length} miners · {container.powerW.toFixed(0)} W
         {" · "}
         <span data-testid={`container-temp-${container.id}`}>
-          inlet {container.inletTempC.toFixed(1)}°C · ambient {container.ambientTempC.toFixed(1)}°C
+          inlet {formatTempC(container.inletTempC)} · ambient {formatTempC(container.ambientTempC)}
         </span>
       </Typography>
       {miners.length === 0 ? (

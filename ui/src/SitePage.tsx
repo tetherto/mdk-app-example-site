@@ -7,6 +7,8 @@ import {
   AlarmsBellButton,
   getHashrateString,
   getHashrateUnit,
+  HeaderConsumptionBox,
+  HeaderEfficiencyBox,
   HeaderHashrateBox,
   HeaderMinersBox,
   HeaderStatsBar,
@@ -17,6 +19,7 @@ import {
 import { AppHeader, HASHRATE_LABEL_DIVISOR, MiningStatusIcon, Spinner, Typography } from "@tetherto/mdk-react-devkit/primitives";
 
 import { AppSidebar } from "./AppSidebar";
+import { InstalledAppPage } from "./installedApps";
 import { HS_PER_MHS, HS_PER_THS, NOMINAL_MHS_PER_MINER } from "./constants";
 import { ContainerDetailPage, ContainersListPage } from "./ContainersPage";
 import { ControlPage } from "./ControlPage";
@@ -24,6 +27,7 @@ import { DashboardPage } from "./DashboardPage";
 import { MinersPage } from "./MinersPage";
 import { PoolsPage } from "./PoolsPage";
 import type { Container, History, Overview, PoolInput } from "./types";
+import { HEALTHY } from "./useMinerRows";
 import { get, powerModesForMiner } from "./utils";
 
 function formatStamp(ts: number): string {
@@ -79,10 +83,10 @@ export function SitePage(): JSX.Element {
         deviceId: key,
         id: key,
         code: key,
-        operatingStatus: "unknown",
+        operatingStatus: miners.some((m) => HEALTHY.has(m.status.toLowerCase())) ? "online" : "offline",
         powerW: miners.reduce((sum, m) => sum + m.powerW, 0),
-        ambientTempC: 0,
-        inletTempC: 0,
+        ambientTempC: null,
+        inletTempC: null,
         minerCount: miners.length,
       } satisfies Container);
     }
@@ -113,7 +117,6 @@ export function SitePage(): JSX.Element {
 
   const minerCounts = useMemo(() => {
     const miners = data?.miners ?? [];
-    const HEALTHY = new Set(["online", "mining", "active", "normal", "running"]);
     let online = 0;
     let error = 0;
     let offline = 0;
@@ -138,6 +141,13 @@ export function SitePage(): JSX.Element {
     const divisor = HASHRATE_LABEL_DIVISOR[unit as keyof typeof HASHRATE_LABEL_DIVISOR] ?? 1;
     return { unit, site: siteMhs / divisor, pool: poolMhs / divisor };
   }, [siteMhs, poolMhs]);
+
+  // Consumption and efficiency on the same basis as the Operation Center's
+  // header: the miners' summed power draw (not the site meter, which also
+  // carries non-mining load), over the miners' summed hashrate.
+  const minersPowerW = data?.totals.powerW ?? 0;
+  const consumptionMw = data ? minersPowerW / 1e6 : undefined;
+  const efficiencyWPerThs = siteMhs > 0 ? minersPowerW / (siteMhs / 1e6) : undefined;
 
   const nominalMhs = (data?.totals.minerCount ?? 0) * NOMINAL_MHS_PER_MINER;
 
@@ -189,10 +199,10 @@ export function SitePage(): JSX.Element {
       deviceId: "__unassigned__",
       id: "__unassigned__",
       code: "unassigned",
-      operatingStatus: "unknown",
-      powerW: 0,
-      ambientTempC: 0,
-      inletTempC: 0,
+      operatingStatus: unassigned.some((m) => HEALTHY.has(m.status.toLowerCase())) ? "online" : "offline",
+      powerW: unassigned.reduce((sum, m) => sum + m.powerW, 0),
+      ambientTempC: null,
+      inletTempC: null,
       minerCount: unassigned.length,
     };
     return [...containerSections, unassignedEntry];
@@ -291,6 +301,8 @@ export function SitePage(): JSX.Element {
             poolMismatch={0}
           />
           <HeaderHashrateBox appPhs={headerHashrate.site} poolPhs={headerHashrate.pool} unit={headerHashrate.unit} />
+          <HeaderConsumptionBox valueMw={consumptionMw} />
+          <HeaderEfficiencyBox valueWthS={efficiencyWPerThs} />
         </HeaderStatsBar>
       </AppHeader>
 
@@ -343,6 +355,7 @@ export function SitePage(): JSX.Element {
                 />
               }
             />
+            <Route path="/app/:appName/*" element={<InstalledAppPage />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>

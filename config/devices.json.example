@@ -14,5 +14,8 @@
   "sealminers": [
     {"info": { "serialNum": "SM-001", "container": "rack-1" }, "opts": { "address": "127.0.0.1", "port": null }},
     {"info": { "serialNum": "SM-002", "container": "rack-1" }, "opts": { "address": "127.0.0.1", "port": null }}
+  ],
+  "powermeters": [
+    {"id": "SATEC-001", "info": { "serialNum": "SATEC-001", "pos": "site" }, "opts": { "address": "127.0.0.1", "port": null, "unitId": 1 }}
   ]
 }

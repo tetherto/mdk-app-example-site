@@ -1,9 +1,31 @@
 'use strict'
 
-const { loadSite, snapStats, snapConfig } = require('./utils')
+const { loadSite, snapStats, snapConfig, pullPoolStats } = require('./utils')
 
 const containerId = (thg) => {
   return (thg.info && thg.info.container) || thg.id || thg.code
+}
+
+// Miner statuses that mean the miner is up (the UI counts the same ones as online).
+const HEALTHY_MINER = new Set(['online', 'mining', 'active', 'normal', 'running'])
+
+// A container with no container worker behind it (this site runs none): its
+// figures come from the miners in it. Power is their summed draw; status is
+// online while any of them hashes, offline when none answers, else error.
+// Nothing measures its temperatures, so they stay null rather than 0 °C.
+const containerFromMiners = (id, miners, inletTempC) => {
+  const healthy = miners.filter((m) => HEALTHY_MINER.has(String(m.status).toLowerCase())).length
+  const offline = miners.filter((m) => String(m.status).toLowerCase() === 'offline').length
+  return {
+    deviceId: id,
+    id,
+    code: id,
+    operatingStatus: healthy > 0 ? 'online' : (offline === miners.length ? 'offline' : 'error'),
+    powerW: miners.reduce((sum, m) => sum + (m.powerW || 0), 0),
+    ambientTempC: null,
+    inletTempC: inletTempC ?? null,
+    minerCount: miners.length
+  }
 }
 
 const phase1CurrentA = (powerSpecific) => {
@@ -77,8 +99,7 @@ const mapSensor = (thg) => {
 }
 
 const mapPool = async (pool, mdkClient) => {
-  const tel = await mdkClient.pullTelemetry(pool.deviceId, { type: 'ext_data', key: 'stats' })
-  const stats = (tel && tel.extData && tel.extData.stats) || []
+  const stats = await pullPoolStats(mdkClient, pool.deviceId)
   const p = stats[0]
   if (!p) return null
   return {
@@ -147,28 +168,18 @@ module.exports = async (req, ctx) => {
       code: thg.code,
       operatingStatus: s.status || 'unknown',
       powerW: s.power_w || 0,
-      ambientTempC: s.ambient_temp_c || 0,
-      inletTempC: sensorByContainer.get(id) || 0,
+      ambientTempC: s.ambient_temp_c ?? null,
+      inletTempC: sensorByContainer.get(id) ?? null,
       minerCount: 0
     })
   }
 
-  // Ensure every container referenced by a miner appears (even if the container
-  // worker has not reported telemetry yet).
+  // Every container a miner names appears, even with no container worker
+  // behind it: then its figures are derived from its miners.
   for (const m of miners) {
-    if (!m.container) continue
-    if (!containerById.has(m.container)) {
-      containerById.set(m.container, {
-        deviceId: m.container,
-        id: m.container,
-        code: m.container,
-        operatingStatus: 'unknown',
-        powerW: 0,
-        ambientTempC: 0,
-        inletTempC: sensorByContainer.get(m.container) || 0,
-        minerCount: 0
-      })
-    }
+    if (!m.container || containerById.has(m.container)) continue
+    const inContainer = miners.filter((x) => x.container === m.container)
+    containerById.set(m.container, containerFromMiners(m.container, inContainer, sensorByContainer.get(m.container)))
   }
 
   const containers = [...containerById.values()]

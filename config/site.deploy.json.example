@@ -47,7 +47,7 @@
     },
     "pool": {
       "apiUrl": "http://127.0.0.1:5065/pool/v1",
-      "accounts": []
+      "accounts": ["emcd"]
     },
     "mock": {
       "port": 5065
@@ -61,7 +61,7 @@
     },
     "pool": {
       "apiUrl": "http://127.0.0.1:5066",
-      "accounts": ["spider-test"]
+      "accounts": ["spider"]
     },
     "mock": {
       "port": 5066
@@ -75,18 +75,137 @@
     },
     "pool": {
       "apiUrl": "http://127.0.0.1:5067",
-      "accounts": ["test"]
+      "accounts": ["foundry"]
     },
     "mock": {
       "port": 5067
+    }
+  },
+  "ocean": {
+    "worker": {
+      "id": "ocean-pool-worker"
+    },
+    "pool": {
+      "apiUrl": "http://127.0.0.1:5068",
+      "accounts": ["ocean"],
+      "apiRetry": 3
+    },
+    "mock": {
+      "port": 5068
+    }
+  },
+  "satec": {
+    "worker": {
+      "id": "satec-powermeter-worker",
+      "model": "pm180",
+      "allowDuplicateIPs": true,
+      "thing": {
+        "collectSnapsItvMs": 5000,
+        "storeSnapItvMs": 5000,
+        "collectSnapTimeoutMs": 15000,
+        "logKeepCount": 5
+      }
+    },
+    "mocks": {
+      "portBase": 18020
     }
   },
   "gateway": {
     "port": 3000,
     "host": "0.0.0.0",
     "allowedHosts": [],
-    "authVerifier": "loopback",
-    "pluginDirs": ["backend/apps/site"],
+    "pluginDirs": [
+      "backend/apps/site",
+      { "name": "demo", "package": "@tetherto/mdk-app-demo" },
+      {
+        "name": "op-center",
+        "package": "@tetherto/mdk-app-operation-center",
+        "config": {
+          "siteName": "MVP Site",
+          "commandsEnabled": true,
+          "layout": {
+            "containers": [
+              {
+                "id": "container-whatsminer",
+                "name": "WhatsMiner",
+                "model": "MicroBT WhatsMiner M56S",
+                "nominalHashrateThs": 212,
+                "meterDeviceId": null,
+                "racks": [
+                  {
+                    "id": "rack-whatsminer-m56s-telemetry-flow",
+                    "name": "Rack 1",
+                    "sockets": [
+                      { "position": "1-1-1", "deviceId": "WM-001" },
+                      { "position": "1-1-2", "deviceId": "WM-002" },
+                      { "position": "1-1-3", "deviceId": "WM-003" },
+                      { "position": "1-1-4", "deviceId": "WM-004" },
+                      { "position": "1-1-5", "deviceId": "WM-005" }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "container-antminer",
+                "name": "Antminer",
+                "model": "Bitmain Antminer S21",
+                "nominalHashrateThs": 200,
+                "meterDeviceId": null,
+                "racks": [
+                  {
+                    "id": "rack-antminer-s21-telemetry-flow",
+                    "name": "Rack 1",
+                    "sockets": [
+                      { "position": "2-1-1", "deviceId": "AM-001" },
+                      { "position": "2-1-2", "deviceId": "AM-002" },
+                      { "position": "2-1-3", "deviceId": "AM-003" }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "container-sealminer",
+                "name": "SealMiner",
+                "model": "SealMiner A2",
+                "nominalHashrateThs": 226,
+                "meterDeviceId": null,
+                "racks": [
+                  {
+                    "id": "rack-sealminer-a2-telemetry-flow",
+                    "name": "Rack 1",
+                    "sockets": [
+                      { "position": "3-1-1", "deviceId": "SM-001" },
+                      { "position": "3-1-2", "deviceId": "SM-002" }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "reporting",
+        "package": "@tetherto/mdk-app-reporting-tool",
+        "config": {
+          "siteConfig": "./config/reporting/site.json",
+          "catalogue": "./config/reporting/hardware-catalogue.json",
+          "sampleIntervalSec": 60
+        }
+      },
+      {
+        "name": "agent",
+        "package": "@tetherto/mdk-app-agent",
+        "mount": "/",
+        "mcp": false,
+        "config": {
+          "agent": {
+            "provider": { "kind": "qvac", "model": "qwen3-4b", "baseURL": "http://127.0.0.1:11500/v1" },
+            "mcp": { "url": "http://127.0.0.1:3101/mcp" }
+          }
+        }
+      }
+    ],
     "staticRootPath": "ui/dist"
   },
   "mcp": {
@@ -101,6 +220,6 @@
     "instances": 1,
     "autorestart": true,
     "restart_delay": 2000,
-    "roles": ["mocks", "mocks-antminer", "mocks-sealminer", "mocks-emcd", "mocks-spiderpool", "mocks-foundry", "kernel", "worker", "worker-antminer", "worker-sealminer", "worker-emcd", "worker-spiderpool", "worker-foundry", "app-site", "gateway", "mcp"]
+    "roles": ["mocks", "mocks-antminer", "mocks-sealminer", "mocks-emcd", "mocks-spiderpool", "mocks-foundry", "mocks-ocean", "mocks-satec", "kernel", "worker", "worker-antminer", "worker-sealminer", "worker-emcd", "worker-spiderpool", "worker-foundry", "worker-ocean", "worker-satec", "app-site", "app-demo", "app-op-center", "app-reporting", "app-agent", "gateway", "mcp"]
   }
 }
