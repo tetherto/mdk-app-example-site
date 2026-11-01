@@ -7,17 +7,18 @@ const path = require('path')
 const fs = require('fs')
 const { execFileSync } = require('child_process')
 const exampleDir = __dirname
+const { appNames } = require('./deploy/apps')
 // Loaded on use: requiring this file (tests) must not need a config/site.deploy.json.
 const loadDeploy = () => require('./backend/site').deploy
 
 const ecosystemPath = path.join(exampleDir, 'deploy', 'ecosystem.config.js')
 
-// Each gateway plugin dir runs as an app in its own `app-<basename>` role, so
-// those roles follow gateway.pluginDirs: one missing from pm2.roles (a config
+// Each gateway app runs in its own `app-<name>` role (see deploy/apps.js for
+// how an entry is named), so those roles follow gateway.pluginDirs: one missing from pm2.roles (a config
 // written before apps existed) is added ahead of the gateway, and one naming
 // no plugin dir is dropped instead of crash-looping under PM2.
 const withAppRoles = (roles, pluginDirs, warn = console.warn) => {
-  const appRoles = pluginDirs.map((dir) => `app-${path.basename(dir)}`)
+  const appRoles = appNames(pluginDirs).map((name) => `app-${name}`)
   const kept = roles.filter((role) => {
     if (!role.startsWith('app-') || appRoles.includes(role)) return true
     warn(`skipping pm2 role "${role}": no gateway.pluginDirs entry named ${role.slice(4)}`)

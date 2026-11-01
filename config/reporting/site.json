@@ -1,0 +1,17 @@
+{
+  "site": {
+    "name": "MVP Site",
+    "timezone": "UTC"
+  },
+  "miningUnits": [
+    { "id": "whatsminer", "name": "WhatsMiner M56S", "workers": ["whatsminer-m56s-telemetry-flow"], "model": "microbt-whatsminer-m56s" },
+    { "id": "antminer", "name": "Antminer S21", "workers": ["antminer-s21-telemetry-flow"], "model": "bitmain-antminer-s21" },
+    { "id": "sealminer", "name": "SealMiner A2", "workers": ["sealminer-a2-telemetry-flow"], "model": "sealminer-a2" }
+  ],
+  "meters": [
+    { "device": "SATEC-001", "label": "Site meter", "siteMeter": true }
+  ],
+  "pool": {
+    "device": "ocean-pool-worker"
+  }
+}

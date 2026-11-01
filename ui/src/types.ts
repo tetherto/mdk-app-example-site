@@ -25,8 +25,9 @@ export type Container = {
   code: string;
   operatingStatus: string;
   powerW: number;
-  ambientTempC: number;
-  inletTempC: number;
+  /** null when nothing measures it (no container worker or sensor). */
+  ambientTempC: number | null;
+  inletTempC: number | null;
   minerCount: number;
 };
 

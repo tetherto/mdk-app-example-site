@@ -2,10 +2,10 @@ id: io.tether.example.mvp-site
 version: 0.0.1
 displayName: MVP Site
 description: "MVP-site example app: aggregates the site (miners, a powermeter, a mining pool) via the MDK protocol client."
+# 0.13 RBAC vocabulary (@tetherto/mdk-rbac): telemetry pulls are `devices: read`,
+# device commands (setupPools, power mode) are `devices: write`.
 permissions:
-  - resources: [workers, devices]
+  - resources: [workers]
     verbs: [list, read]
-  - resources: [telemetry]
-    verbs: [read]
   - resources: [devices]
-    verbs: [execute]
+    verbs: [read, write]
