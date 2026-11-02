@@ -1,6 +1,6 @@
 'use strict'
 
-const { loadSite } = require('./utils')
+const { loadSite, pullPoolStatsHistory } = require('./utils')
 
 const ONE_HOUR_MS = 60 * 60 * 1000
 
@@ -8,7 +8,8 @@ const ONE_HOUR_MS = 60 * 60 * 1000
 //   power         — site powermeter tail-log (telemetry.pull 'logs' on thing-5m)
 //   temperature   — Seneca sensor tail-log (snap.stats.temp_c)
 //   hashrate      — pool stats-history (telemetry.pull 'ext_data' key 'stats-history'),
-//                   the scheduler worker's persisted stats series.
+//                   the scheduler worker's persisted stats series; contract-first
+//                   pools (ocean) answer from their `stats_history` channel.
 //   site-hashrate — miner tail-logs (snap.stats.hashrate_mhs), summed across
 //                   all miners; MH/s.
 //
@@ -163,11 +164,8 @@ module.exports = async (req, ctx) => {
 
   const byTs = new Map()
   await Promise.all(selectedPools.map(async (pool) => {
-    const tel = await mdkClient.pullTelemetry(pool.deviceId, {
-      type: 'ext_data', key: 'stats-history', start, end
-    })
-    const entries = (tel && tel.extData) || []
-    for (const e of (Array.isArray(entries) ? entries : [])) {
+    const entries = await pullPoolStatsHistory(mdkClient, pool.deviceId, { start, end })
+    for (const e of entries) {
       if (!e || !Array.isArray(e.stats) || !e.stats[0]) continue
       const value = Number(e.stats[0].hashrate) || 0
       byTs.set(e.ts, (byTs.get(e.ts) || 0) + value)

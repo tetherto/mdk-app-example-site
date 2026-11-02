@@ -1,0 +1,31 @@
+{
+  "models": [
+    {
+      "id": "microbt-whatsminer-m56s",
+      "vendor": "MicroBT",
+      "model": "WhatsMiner M56S",
+      "displayName": "WhatsMiner M56S",
+      "nominalHashrateThs": 212,
+      "nominalPowerW": 5550,
+      "aliases": ["m56s"]
+    },
+    {
+      "id": "bitmain-antminer-s21",
+      "vendor": "Bitmain",
+      "model": "Antminer S21",
+      "displayName": "Antminer S21",
+      "nominalHashrateThs": 200,
+      "nominalPowerW": 3500,
+      "aliases": ["s21", "miner-am-s21", "Antminer S21"]
+    },
+    {
+      "id": "sealminer-a2",
+      "vendor": "SealMiner",
+      "model": "SealMiner A2",
+      "displayName": "SealMiner A2",
+      "nominalHashrateThs": 226,
+      "nominalPowerW": 3730,
+      "aliases": ["a2", "SealMiner A2"]
+    }
+  ]
+}

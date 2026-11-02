@@ -11,7 +11,9 @@ const WORKER_FAMILY = {
   // `config` pull can't classify them — the fallback map must.
   'emcd-pool-worker': 'minerpool',
   'spiderpool-pool-worker': 'minerpool',
-  'foundry-pool-worker': 'minerpool'
+  'foundry-pool-worker': 'minerpool',
+  // Contract-first (WorkerRuntimeV2) and no provisioning either.
+  'ocean-pool-worker': 'minerpool'
 }
 
 const resolveFamily = (worker, cfg) => {
@@ -127,6 +129,28 @@ const loadSite = async (mdkClient, opts = {}) => {
   return { workers, byFamily, pools }
 }
 
+// Pool account data comes from two worker shapes. V1 pool workers
+// (emcd/spiderpool/foundry) serve it from their pool service as `ext_data`;
+// contract-first ones (ocean, WorkerRuntimeV2) have no pool service, answer
+// `ext_data` with ERR_UNKNOWN_QUERY_TYPE, and declare `stats` /
+// `stats_history` channels instead. Both carry the same per-account rows
+// ({ username, hashrate (H/s), hashrate_24h, balance, revenue_24h, ... }).
+const pullPoolStats = async (mdkClient, deviceId) => {
+  const tel = await mdkClient.pullTelemetry(deviceId, { type: 'ext_data', key: 'stats' })
+  if (tel && tel.extData) return tel.extData.stats || []
+  const chan = await mdkClient.pullTelemetry(deviceId, { type: 'stats' })
+  return (chan && chan.value && chan.value.stats) || []
+}
+
+// -> [{ ts, stats: [row, ...] }, ...]
+const pullPoolStatsHistory = async (mdkClient, deviceId, { start, end }) => {
+  const tel = await mdkClient.pullTelemetry(deviceId, { type: 'ext_data', key: 'stats-history', start, end })
+  if (tel && Array.isArray(tel.extData)) return tel.extData
+  if (tel && tel.extData) return []
+  const chan = await mdkClient.pullTelemetry(deviceId, { type: 'stats_history', start, end })
+  return (chan && Array.isArray(chan.value)) ? chan.value : []
+}
+
 const snapStats = (thg) => {
   return (thg && thg.last && thg.last.snap && thg.last.snap.stats) || {}
 }
@@ -135,4 +159,4 @@ const snapConfig = (thg) => {
   return (thg && thg.last && thg.last.snap && thg.last.snap.config) || {}
 }
 
-module.exports = { loadSite, snapStats, snapConfig, WORKER_FAMILY, resolveFamily }
+module.exports = { loadSite, snapStats, snapConfig, pullPoolStats, pullPoolStatsHistory, WORKER_FAMILY, resolveFamily }

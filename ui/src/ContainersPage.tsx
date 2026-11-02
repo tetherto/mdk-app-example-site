@@ -11,6 +11,10 @@ import {
 
 import { ContainerGrid } from "./ContainerGrid";
 import type { Container, Miner } from "./types";
+import { HEALTHY } from "./useMinerRows";
+
+/** A temperature, or a dash when nothing measures it. */
+export const formatTempC = (value: number | null): string => (value === null ? "—" : `${value.toFixed(1)}°C`);
 
 export function ContainersListPage({
   allContainers,
@@ -27,7 +31,7 @@ export function ContainersListPage({
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
         {allContainers.map((c) => {
           const miners = minersByContainer.get(c.id) ?? [];
-          const onlineCount = miners.filter((m) => m.status === "online").length;
+          const onlineCount = miners.filter((m) => HEALTHY.has(m.status.toLowerCase())).length;
           const isOnline = c.operatingStatus === "online";
           return (
             <Card
@@ -51,11 +55,11 @@ export function ContainersListPage({
                   </div>
                   <div>
                     <Typography variant="caption" style={{ color: "#555", display: "block" }}>Inlet temp</Typography>
-                    <Typography variant="body">{c.inletTempC.toFixed(1)}°C</Typography>
+                    <Typography variant="body">{formatTempC(c.inletTempC)}</Typography>
                   </div>
                   <div>
                     <Typography variant="caption" style={{ color: "#555", display: "block" }}>Ambient temp</Typography>
-                    <Typography variant="body">{c.ambientTempC.toFixed(1)}°C</Typography>
+                    <Typography variant="body">{formatTempC(c.ambientTempC)}</Typography>
                   </div>
                 </div>
               </CardBody>

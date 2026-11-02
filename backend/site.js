@@ -10,6 +10,10 @@
 const path = require('path')
 const fs = require('fs')
 const debug = require('debug')('mdk:example:mvp-site')
+const YAML = require('yaml')
+const { generateCredential } = require('@tetherto/mdk-identity')
+const { appGrant } = require('@tetherto/mdk-rbac')
+const { resolveApps } = require('../deploy/apps')
 const { getKernel } = require('@tetherto/mdk-core')
 const {
   publishWorkerKey, keysDir, trustedKeysDir, readTrustedKeys, waitForKernelKey, trustKernel, trustKeysFromDir
@@ -17,7 +21,7 @@ const {
 
 // Workers installed from github.com rather than the npm registry; checked
 // up front so a missing one is named instead of surfacing as MODULE_NOT_FOUND.
-const GIT_DEPS = ['whatsminer-mdk-worker', 'antminer-mdk-worker', 'sealminer-mdk-worker', 'emcd-mdk-worker', 'spiderpool-mdk-worker', 'foundry-mdk-worker']
+const GIT_DEPS = ['whatsminer-mdk-worker', 'antminer-mdk-worker', 'sealminer-mdk-worker', 'emcd-mdk-worker', 'spiderpool-mdk-worker', 'foundry-mdk-worker', 'ocean-mdk-worker']
 
 const missingGitDeps = GIT_DEPS.filter((name) => {
   try {
@@ -38,6 +42,7 @@ const { startWhatsminerWorker } = require('./adapters/whatsminer-adapter')
 const { startAntminerWorker } = require('./adapters/antminer-adapter')
 const { startSealminerWorker } = require('./adapters/sealminer-adapter')
 const { startPoolPluginWorker } = require('./adapters/pool-adapter')
+const { startOceanWorker } = require('./adapters/ocean-adapter')
 const emcd = require('emcd-mdk-worker')
 const spiderpool = require('spiderpool-mdk-worker')
 const foundry = require('foundry-mdk-worker')
@@ -50,12 +55,30 @@ const spiderpoolMock = require('spiderpool-mdk-worker/mock/server')
 const spiderpoolMockKeys = require('spiderpool-mdk-worker/mock/keys')
 const foundryMock = require('foundry-mdk-worker/mock/server')
 const foundryMockKeys = require('foundry-mdk-worker/mock/keys')
+const emcdMockState = require('emcd-mdk-worker/mock/state')
+const spiderpoolMockState = require('spiderpool-mdk-worker/mock/state')
+const foundryMockState = require('foundry-mdk-worker/mock/state')
+const oceanMock = require('ocean-mdk-worker/mock/server')
+
+// MDK's SATEC power-meter worker isn't on npm and can't be a package.json
+// dependency (see deploy/fetch-satec.js, which vendors it). Loaded on use, so
+// a site without it fetched still boots every other role.
+const satec = (file = '') => {
+  const { SATEC_DIR } = require('../deploy/fetch-satec')
+  try {
+    return require(path.join(SATEC_DIR, file))
+  } catch (err) {
+    if (err.code !== 'MODULE_NOT_FOUND') throw err
+    throw new Error('ERR_SATEC_MISSING: the SATEC worker is not fetched — run "npm run setup:satec"', { cause: err })
+  }
+}
 
 const exampleDir = path.join(__dirname, '..')
 const deploy = require(path.join(exampleDir, 'config', 'site.deploy.json'))
 
 const ROOT = path.join(exampleDir, deploy.root)
-const PLUGIN_DIRS = deploy.gateway.pluginDirs.map((p) => path.join(exampleDir, p))
+// Gateway apps: { name, appDir, mount, config, mcp } — see deploy/apps.js.
+const APPS = resolveApps(deploy.gateway.pluginDirs, exampleDir)
 const MCP_PLUGIN_DIRS = (deploy.mcp.agentTools?.pluginDirs || []).map((p) => path.join(exampleDir, p))
 const STATIC_ROOT_PATH = path.join(exampleDir, deploy.gateway.staticRootPath)
 
@@ -66,14 +89,18 @@ const MOCK_PORT_BASE = deploy.mocks.portBase
 const ANTMINER_MOCK_PORT_BASE = deploy.antminer?.mocks?.portBase
 // Optional for the same reason as `antminer`.
 const SEALMINER_MOCK_PORT_BASE = deploy.sealminer?.mocks?.portBase
+// Optional for the same reason as `antminer`.
+const SATEC_MOCK_PORT_BASE = deploy.satec?.mocks?.portBase
 const GATEWAY_PORT = deploy.gateway.port
 const GATEWAY_HOST = deploy.gateway.host
 // The gateway serves only these Host headers (loopback on its port is always in).
 // A LAN deploy lists the names/addresses the UI is opened with.
 const GATEWAY_ALLOWED_HOSTS = deploy.gateway.allowedHosts || []
-// Who may call `auth: true` routes (the agent plugin). 'loopback' admits callers on
-// this machine only; a LAN deploy needs a real verifier for remote operators.
-const GATEWAY_AUTH_VERIFIER = deploy.gateway.authVerifier || 'loopback'
+// No auth verifier is passed: since @tetherto/mdk-gateway 0.13 a Gateway
+// started with a Kernel checks every route against spec.rbac, and the named
+// 'loopback' verifier was removed (passing any name fails the boot with
+// ERR_GATEWAY_AUTH_VERIFIER_INVALID). A stale gateway.authVerifier left in a
+// local site.deploy.json is ignored.
 const MCP_AGENT_TOOLS_PORT = deploy.mcp.agentTools?.port
 const DISCOVERY = deploy.discovery
 const WORKER_ID = deploy.worker.id
@@ -84,6 +111,8 @@ const SEALMINER_WORKER_ID = deploy.sealminer?.worker?.id
 const EMCD_WORKER_ID = deploy.emcd?.worker?.id
 const SPIDERPOOL_WORKER_ID = deploy.spiderpool?.worker?.id
 const FOUNDRY_WORKER_ID = deploy.foundry?.worker?.id
+const OCEAN_WORKER_ID = deploy.ocean?.worker?.id
+const SATEC_WORKER_ID = deploy.satec?.worker?.id
 
 // config/devices.json is gitignored (local/per-dev config) — see README "Seed devices".
 // worker.pools is the default pool config; opts.conf.pools overrides per device.
@@ -104,7 +133,8 @@ const loadSeedDevices = () => {
     antminers: assignPools(assignPorts(devices.antminers, ANTMINER_MOCK_PORT_BASE)),
     // The SealMiner contract takes pools through its setupPools command, not
     // device config, so worker.pools isn't applied here.
-    sealminers: assignPorts(devices.sealminers, SEALMINER_MOCK_PORT_BASE)
+    sealminers: assignPorts(devices.sealminers, SEALMINER_MOCK_PORT_BASE),
+    powermeters: assignPorts(devices.powermeters, SATEC_MOCK_PORT_BASE)
   }
 }
 
@@ -158,16 +188,143 @@ const startSealminerMocks = (miners) => {
   })))
 }
 
-// The EMCD, SpiderPool and Foundry mocks serve fixed fixture accounts (no fleet
-// sizing). createServer() is async and returns { app, apiUrl }.
-const startPoolPluginMock = (mock, port) => {
-  const server = mock.createServer({ port, host: HOST })
+// One SATEC Modbus mock per seed entry under `powermeters`. Unless
+// satec.mocks.powerW pins it, the meters split the fleet's draw: about
+// AVG_MINER_POWER_W per seeded miner.
+const AVG_MINER_POWER_W = 3400
+const startSatecMocks = (powermeters, minerCount) => {
+  const satecMock = satec('mock/server')
+  const powerW = deploy.satec.mocks.powerW ?? (minerCount * AVG_MINER_POWER_W) / (powermeters.length || 1)
+  return mockHandles(powermeters.map((d) => satecMock.createServer({
+    port: d.opts.port,
+    host: HOST,
+    type: deploy.satec.worker.model,
+    powerW
+  })))
+}
+
+// The EMCD, SpiderPool and Foundry mocks answer only for the accounts they are
+// started with (each defaults to one fixture account), so they are seeded
+// from the same <pool>.pool.accounts list the worker polls: renaming an
+// account in site.deploy.json renames it on both sides. createServer() is
+// async and returns { app, apiUrl }.
+const startPoolPluginMock = (mock, port, opts = {}) => {
+  const server = mock.createServer({ port, host: HOST, ...opts })
   return mockHandles([{ ready: server, exit: () => server.then(({ app }) => app.close()) }])
 }
 
-const startEmcdMock = () => startPoolPluginMock(emcdMock, deploy.emcd.mock.port)
-const startSpiderpoolMock = () => startPoolPluginMock(spiderpoolMock, deploy.spiderpool.mock.port)
-const startFoundryMock = () => startPoolPluginMock(foundryMock, deploy.foundry.mock.port)
+// Foundry accounts may be { name, apiKey } entries instead of plain names.
+const accountNames = (section) => (section.pool.accounts || []).map((a) => (typeof a === 'string' ? a : a.name))
+const forAccounts = (names, value) => Object.fromEntries(names.map((name) => [name, value(name)]))
+
+// An empty list is EMCD's master account (subaccount ID '').
+const startEmcdMock = () => {
+  const names = accountNames(deploy.emcd)
+  return startPoolPluginMock(emcdMock, deploy.emcd.mock.port, {
+    accounts: forAccounts(names.length ? names : [''], () => emcdMockState())
+  })
+}
+
+const startSpiderpoolMock = () => startPoolPluginMock(spiderpoolMock, deploy.spiderpool.mock.port, {
+  accounts: forAccounts(accountNames(deploy.spiderpool), () => spiderpoolMockState())
+})
+
+// Every account accepts the fixture keys bootFoundryWorker falls back to when
+// FOUNDRY_API_KEY is unset; a per-account apiKey in the config is honoured.
+const startFoundryMock = () => {
+  const entries = deploy.foundry.pool.accounts || []
+  const names = accountNames(deploy.foundry)
+  const keyOf = (name) => entries.find((a) => typeof a === 'object' && a.name === name)?.apiKey || foundryMockKeys.apiKey
+  return startPoolPluginMock(foundryMock, deploy.foundry.mock.port, {
+    accounts: forAccounts(names, (name) => foundryMockState({ name })),
+    apiKeys: forAccounts(names, keyOf),
+    technicianKeys: forAccounts(names, () => foundryMockKeys.technicianKey)
+  })
+}
+
+// ocean-mdk-worker's mock serves the Ocean (and DATUM) routes with a `test`
+// fixture account. Its createServer() is synchronous and listens via a
+// callback, so wait on the server's 'listening' event; its exit() calls
+// process.exit, so close the fastify app instead.
+const startOceanMock = () => {
+  const { app } = oceanMock.createServer({ port: deploy.ocean.mock.port, host: HOST, delay: 0 })
+  const ready = new Promise((resolve, reject) => {
+    if (app.server.listening) return resolve()
+    app.server.once('listening', resolve)
+    app.server.once('error', reject)
+  })
+  return mockHandles([{ ready, exit: () => app.close() }])
+}
+
+// --- Kernel identity: service accounts + spec.rbac -----------------------------
+//
+// Since @tetherto/mdk 0.13 the Kernel authorizes every request by the caller's
+// access token against spec.rbac (default deny). The `mdk` CLI normally writes
+// the credentials and policy; this example boots without it, so it does the
+// same here: one Ed25519 service account per app runtime (`app:<name>`) and
+// one for the MCP tool plugins, created once under <root>/credentials and
+// registered with the Kernel by public key.
+
+const MCP_SERVICE_ACCOUNT = 'mcp-site-tools'
+
+const credentialFile = (root, name) => path.join(root, 'credentials', `${name.replace(/[^A-Za-z0-9._-]/g, '_')}.json`)
+
+// Every PM2 role starts at once and several read the same credential, so it
+// is created atomically: written to a temp file, then hard-linked into place
+// (fails with EEXIST if another process won the race, whose file is read).
+const ensureCredential = (root, name) => {
+  const file = credentialFile(root, name)
+  if (!fs.existsSync(file)) {
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 })
+    const { publicKey, privateKeyPem } = generateCredential()
+    const tmp = `${file}.${process.pid}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify({ name, publicKey, privateKeyPem }), { mode: 0o600 })
+    try {
+      fs.linkSync(tmp, file)
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err
+    } finally {
+      fs.rmSync(tmp, { force: true })
+    }
+  }
+  const cred = JSON.parse(fs.readFileSync(file, 'utf8'))
+  return { file, name: cred.name, publicKey: cred.publicKey, privateKey: cred.privateKeyPem }
+}
+
+// The MCP tool plugins (get_device, act_device, ...) read workers and devices
+// and send device commands; act_device stays withheld unless the MCP server
+// is started with allowWrite/allowTools.
+const MCP_TOOLS_ROLE = {
+  name: 'mcp-site-tools',
+  rules: [
+    { resources: ['workers'], verbs: ['list', 'read'] },
+    { resources: ['devices'], verbs: ['read', 'write'] }
+  ]
+}
+
+// spec.rbac: each app gets what its mdk-app.yaml `permissions` request (the
+// role `mdk add app` would write), and the MCP tools get MCP_TOOLS_ROLE.
+const sitePolicy = () => {
+  const roles = [MCP_TOOLS_ROLE]
+  const bindings = [{ role: MCP_TOOLS_ROLE.name, subjects: [{ kind: 'ServiceAccount', name: MCP_SERVICE_ACCOUNT }] }]
+  for (const app of APPS) {
+    const manifest = YAML.parse(fs.readFileSync(path.join(app.appDir, 'mdk-app.yaml'), 'utf8'))
+    const { role, binding } = appGrant(app.name, manifest.permissions || [])
+    if (role) {
+      roles.push(role)
+      bindings.push(binding)
+    }
+  }
+  return { enforcement: 'deny', roles, bindings }
+}
+
+const siteServiceAccounts = (root) => [
+  ...APPS.map((app) => `app:${app.name}`),
+  MCP_SERVICE_ACCOUNT
+].map((name) => {
+  const { publicKey } = ensureCredential(root, name)
+  return { name, publicKey }
+})
 
 // --- Kernel + worker boot ------------------------------------------------------
 
@@ -175,7 +332,13 @@ const startFoundryMock = () => startPoolPluginMock(foundryMock, deploy.foundry.m
 // key it publishes to the shared dir) or 'dht' (Hyperswarm topic; `topic` pins it).
 const bootKernel = async ({ root, topic, mode = DISCOVERY } = {}) => {
   // The example's processes exit on Ctrl-C/SIGTERM — opt in explicitly.
-  const opts = { root, storeDir: path.join(root, 'kernel-db'), handleSignals: true }
+  const opts = {
+    root,
+    storeDir: path.join(root, 'kernel-db'),
+    handleSignals: true,
+    rbac: sitePolicy(),
+    serviceAccounts: siteServiceAccounts(root)
+  }
   if (mode === 'local') {
     opts.discovery = { mode: 'local' }
   } else {
@@ -404,6 +567,49 @@ const bootFoundryWorker = ({ kernel, kernelTopic, root, mode = DISCOVERY }) => {
   })
 }
 
+// Ocean is a contract-first (WorkerRuntimeV2) plugin with its own refresh
+// loop, so it gets no drivePool pacer. The Ocean API is public (accounts are
+// usernames); only the optional DATUM gateway takes credentials, passed as
+// plugin env when both DATUM_USER and DATUM_PASSWORD are set.
+const bootOceanWorker = async ({ kernel, kernelTopic, root, mode = DISCOVERY }) => {
+  const env = process.env.DATUM_USER && process.env.DATUM_PASSWORD
+    ? { DATUM_USER: process.env.DATUM_USER, DATUM_PASSWORD: process.env.DATUM_PASSWORD }
+    : {}
+  const handle = await startOceanWorker({
+    allowedKeys: await workerTrust({ kernel, root }),
+    workerId: OCEAN_WORKER_ID,
+    storeDir: workerStoreDir(root, OCEAN_WORKER_ID),
+    kernelTopic: (!kernel && mode !== 'local') ? kernelTopic : null,
+    pool: deploy.ocean.pool,
+    env
+  })
+
+  await registerWorker(handle, OCEAN_WORKER_ID, { kernel, root, mode })
+  return handle
+}
+
+// The SATEC worker predates the contract-first workers: it runs on the MDK
+// release's own worker runtime (vendored with it) and registers like the rest.
+// A seed device with info.pos 'site' is the site meter the overview reads.
+const bootSatecWorker = async ({ kernel, kernelTopic, root, mode = DISCOVERY, devices }) => {
+  const { startSatecWorker } = satec()
+  const handle = await startSatecWorker({
+    allowedKeys: await workerTrust({ kernel, root }),
+    workerId: SATEC_WORKER_ID,
+    model: deploy.satec.worker.model,
+    storeDir: workerStoreDir(root, SATEC_WORKER_ID),
+    conf: {
+      allowDuplicateIPs: deploy.satec.worker.allowDuplicateIPs,
+      thing: deploy.satec.worker.thing
+    },
+    kernelTopic: (!kernel && mode !== 'local') ? kernelTopic : null,
+    seedDevices: devices
+  })
+
+  await registerWorker(handle, SATEC_WORKER_ID, { kernel, root, mode })
+  return handle
+}
+
 module.exports = {
   exampleDir,
   deploy,
@@ -412,12 +618,12 @@ module.exports = {
   MOCK_PORT_BASE,
   ANTMINER_MOCK_PORT_BASE,
   SEALMINER_MOCK_PORT_BASE,
+  SATEC_MOCK_PORT_BASE,
   GATEWAY_PORT,
   GATEWAY_HOST,
   GATEWAY_ALLOWED_HOSTS,
-  GATEWAY_AUTH_VERIFIER,
   MCP_AGENT_TOOLS_PORT,
-  PLUGIN_DIRS,
+  APPS,
   MCP_PLUGIN_DIRS,
   STATIC_ROOT_PATH,
   DISCOVERY,
@@ -427,6 +633,11 @@ module.exports = {
   EMCD_WORKER_ID,
   SPIDERPOOL_WORKER_ID,
   FOUNDRY_WORKER_ID,
+  OCEAN_WORKER_ID,
+  SATEC_WORKER_ID,
+  MCP_SERVICE_ACCOUNT,
+  ensureCredential,
+  sitePolicy,
   loadSeedDevices,
   startMocks,
   startAntminerMocks,
@@ -434,11 +645,15 @@ module.exports = {
   startEmcdMock,
   startSpiderpoolMock,
   startFoundryMock,
+  startOceanMock,
+  startSatecMocks,
   bootKernel,
   bootWorker,
   bootAntminerWorker,
   bootSealminerWorker,
   bootEmcdWorker,
   bootSpiderpoolWorker,
-  bootFoundryWorker
+  bootFoundryWorker,
+  bootOceanWorker,
+  bootSatecWorker
 }

@@ -1,4 +1,5 @@
 import { MdkProvider } from "@tetherto/mdk-react-adapter";
+import { BarController, Chart, LineController } from "chart.js";
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
 import { HashRouter } from "react-router";
@@ -7,10 +8,15 @@ import "@tetherto/mdk-react-devkit/styles.css";
 import "@tetherto/mdk-react-devkit/styles-domain.css";
 import { SitePage } from "./SitePage";
 
+// The installed apps' charts mix bar and line datasets on one canvas. The
+// devkit registers the line controller only as a side effect of its area chart,
+// which a page may never load first: register both controllers up front.
+Chart.register(BarController, LineController);
+
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("ERR_ROOT_ELEMENT_MISSING");
 
-// Same-origin: the Vite dev proxy forwards /site/* to the gateway.
+// Same-origin: the Vite dev proxy forwards /site/* and /apps/* to the gateway.
 ReactDOM.createRoot(rootElement).render(
   <StrictMode>
     <HashRouter>
