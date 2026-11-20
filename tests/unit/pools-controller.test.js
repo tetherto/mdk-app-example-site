@@ -1,23 +1,18 @@
 'use strict'
 
 const test = require('brittle')
-const { execFileSync } = require('node:child_process')
-const path = require('node:path')
-
-const exampleDir = path.join(__dirname, '..', '..')
-
-// The controller reads config/site.deploy.json at load — seed local config
-// from the *.example files first (no-op when it already exists).
-execFileSync('node', [path.join(exampleDir, 'deploy', 'setup-config.js')])
 
 const controller = require('../../backend/apps/site/controllers/pools')
-const deploy = require('../../config/site.deploy.json')
+
+// The site app's `config.defaultPools` in mdk.yaml.
+const DEFAULT_POOLS = [{ url: 'stratum+tcp://btc.example-pool.com:3333', worker_name: 'account.worker', worker_password: 'x' }]
 
 function makeServices (result = { commandId: 'cmd-1', status: 'PENDING' }) {
   const calls = []
   return {
     calls,
     services: {
+      defaultPools: DEFAULT_POOLS,
       mdkClient: {
         sendCommand: async (deviceId, command, params) => {
           calls.push({ deviceId, command, params })
@@ -63,12 +58,12 @@ test('pools controller - dispatches body pools', async (t) => {
   t.is(res.status, 'PENDING')
 })
 
-test('pools controller - falls back to config worker.pools', async (t) => {
+test('pools controller - falls back to the app config defaultPools', async (t) => {
   const { services, calls } = makeServices()
   const res = await controller({ params: { deviceId: 'd1' }, body: {} }, services)
 
-  t.alike(calls[0].params.pools, deploy.worker.pools)
-  t.alike(res.pools, deploy.worker.pools.map((p) => p.url))
+  t.alike(calls[0].params.pools, DEFAULT_POOLS)
+  t.alike(res.pools, DEFAULT_POOLS.map((p) => p.url))
 })
 
 test('pools controller - passes appendId false through', async (t) => {

@@ -1,0 +1,389 @@
+# The example site as one MDK stack: `npm start` runs `mdk run`, which boots the
+# Kernel, every worker below with its mock devices, the apps and the Gateway in
+# one process. The README walks through it; `npm run mdk -- --help` covers the CLI.
+apiVersion: mdk/v1
+kind: Stack
+metadata:
+  name: example-site
+spec:
+  # A private HyperDHT bootstrap on loopback: the whole site runs on one machine
+  # and needs no internet access. Remove this block to join the public HyperDHT.
+  network:
+    dht:
+      host: 127.0.0.1
+      port: 49737
+  gateway:
+    port: 3000
+    config:
+      # The site UI (ui/dist), served at / with an index.html fallback.
+      # `npm run setup` writes its absolute path to .env.
+      staticRootPath: ${MDK_SITE_UI_DIST}
+      # Host names the Gateway answers besides loopback, e.g. "10.0.0.4:3000"
+      # to open the UI from another machine.
+      allowedHosts: []
+  mcp:
+    port: 3101
+  workers:
+    # Worker names are the ids the site app, the Operation Center layout and the
+    # Reporting Tool config address. Each device's `opts` goes to both the plugin
+    # and its mock (`config.mock`), so it carries the plugin's `address` and the
+    # mock's `host` and `state`.
+    - name: whatsminer-m56s-telemetry-flow
+      package: whatsminer-mdk-worker
+      config:
+        mock: mock/api-v3-server.js
+        devices:
+          - id: WM-001
+            opts:
+              address: 127.0.0.1
+              host: 127.0.0.1
+              port: 14031
+              password: admin
+              conf:
+                pools: &pools
+                  - url: "stratum+tcp://btc.example-pool.com:3333"
+                    worker_name: account.worker
+                    worker_password: x
+              state: { deviceInfo: { miner: { type: m56s, miner-sn: WM-001 } } }
+          - id: WM-002
+            opts:
+              address: 127.0.0.1
+              host: 127.0.0.1
+              port: 14032
+              password: admin
+              conf: { pools: *pools }
+              state: { deviceInfo: { miner: { type: m56s, miner-sn: WM-002 } } }
+          - id: WM-003
+            opts:
+              address: 127.0.0.1
+              host: 127.0.0.1
+              port: 14033
+              password: admin
+              conf: { pools: *pools }
+              state: { deviceInfo: { miner: { type: m56s, miner-sn: WM-003 } } }
+          - id: WM-004
+            opts:
+              address: 127.0.0.1
+              host: 127.0.0.1
+              port: 14034
+              password: admin
+              conf: { pools: *pools }
+              state: { deviceInfo: { miner: { type: m56s, miner-sn: WM-004 } } }
+          - id: WM-005
+            opts:
+              address: 127.0.0.1
+              host: 127.0.0.1
+              port: 14035
+              password: admin
+              conf: { pools: *pools }
+              state: { deviceInfo: { miner: { type: m56s, miner-sn: WM-005 } } }
+    - name: antminer-s21-telemetry-flow
+      package: antminer-mdk-worker
+      config:
+        mock: mock/cgi-server.js
+        devices:
+          - id: AM-001
+            opts:
+              address: 127.0.0.1
+              host: 127.0.0.1
+              port: 16080
+              username: root
+              password: admin
+              # Resolves the rated J/TH the plugin reports.
+              type: miner-am-s21
+              conf: { pools: *pools }
+              state: { systemInfo: { serinum: AM-001 } }
+          - id: AM-002
+            opts:
+              address: 127.0.0.1
+              host: 127.0.0.1
+              port: 16081
+              username: root
+              password: admin
+              type: miner-am-s21
+              conf: { pools: *pools }
+              state: { systemInfo: { serinum: AM-002 } }
+          - id: AM-003
+            opts:
+              address: 127.0.0.1
+              host: 127.0.0.1
+              port: 16082
+              username: root
+              password: admin
+              type: miner-am-s21
+              conf: { pools: *pools }
+              state: { systemInfo: { serinum: AM-003 } }
+    - name: sealminer-a2-telemetry-flow
+      package: sealminer-mdk-worker
+      config:
+        mock: true
+        # Pools are set on a SealMiner by its setupPools command, not device config.
+        devices:
+          - id: SM-001
+            opts:
+              {
+                address: 127.0.0.1,
+                host: 127.0.0.1,
+                port: 17028,
+                series: A2,
+                firmware: "2026060901"
+              }
+          - id: SM-002
+            opts:
+              {
+                address: 127.0.0.1,
+                host: 127.0.0.1,
+                port: 17029,
+                series: A2,
+                firmware: "2026060901"
+              }
+    - name: satec-powermeter-worker
+      # Not on npm: `npm run setup:satec` fetches it from the MDK release.
+      package: ./vendor/mdk-satec/backend/workers/power-meter/satec
+      config:
+        mock: true
+        devices:
+          # powerW: the mock's reading, the 10 miners above at 3400 W each.
+          - id: SATEC-001
+            opts:
+              {
+                address: 127.0.0.1,
+                host: 127.0.0.1,
+                port: 18020,
+                unitId: 1,
+                type: pm180,
+                powerW: 34000
+              }
+    - name: ocean-pool-worker
+      package: ocean-mdk-worker
+      config:
+        mock: true
+        devices:
+          # One logical device; the mock answers for any account name.
+          - id: ocean-pool-worker
+            opts:
+              {
+                host: 127.0.0.1,
+                port: 5068,
+                apiUrl: "http://127.0.0.1:5068",
+                accounts: [ ocean ],
+                apiRetry: 3
+              }
+    # The EMCD, SpiderPool and Foundry workers run through workers/v1-pool (see
+    # the README). Real credentials go in each worker's `env`, e.g.
+    # `env: { EMCD_API_KEY: "${EMCD_API_KEY}", EMCD_API_SECRET: "${EMCD_API_SECRET}" }`;
+    # without them the vendor's mock fixture keys are used. A real pool also
+    # needs `apiUrl` instead of the mock's host and port, and `mock: false`.
+    - name: emcd-pool-worker
+      package: ./workers/v1-pool
+      config:
+        mock: true
+        devices:
+          - id: emcd-pool-worker
+            opts:
+              {
+                kind: emcd,
+                host: 127.0.0.1,
+                port: 5065,
+                apiPath: /pool/v1,
+                accounts: [ emcd ],
+                tickMs: 10000
+              }
+    - name: spiderpool-pool-worker
+      package: ./workers/v1-pool
+      config:
+        mock: true
+        devices:
+          - id: spiderpool-pool-worker
+            opts:
+              {
+                kind: spiderpool,
+                host: 127.0.0.1,
+                port: 5066,
+                accounts: [ spider ],
+                tickMs: 10000
+              }
+    - name: foundry-pool-worker
+      package: ./workers/v1-pool
+      config:
+        mock: true
+        devices:
+          - id: foundry-pool-worker
+            opts:
+              {
+                kind: foundry,
+                host: 127.0.0.1,
+                port: 5067,
+                accounts: [ foundry ],
+                tickMs: 10000
+              }
+  apps:
+    - name: site
+      package: ./backend/apps/site
+      # The UI calls /site/* at the root, not /apps/site/site/*.
+      mount: /
+      config:
+        # The pools POST /site/miners/:deviceId/pools applies without a body.
+        defaultPools: *pools
+      serviceAccount: app:site
+      permissionsDigest: fe53e04a1b62479d
+    - name: demo
+      package: "@tetherto/mdk-app-demo"
+      serviceAccount: app:demo
+      permissionsDigest: ca270242ee07e6e1
+    - name: op-center
+      package: "@tetherto/mdk-app-operation-center"
+      config:
+        siteName: MVP Site
+        commandsEnabled: true
+        # Places each miner in a container, rack and socket.
+        layout:
+          containers:
+            - id: container-whatsminer
+              name: WhatsMiner
+              model: MicroBT WhatsMiner M56S
+              nominalHashrateThs: 212
+              meterDeviceId: null
+              racks:
+                - id: rack-whatsminer-m56s-telemetry-flow
+                  name: Rack 1
+                  sockets:
+                    - { position: 1-1-1, deviceId: WM-001 }
+                    - { position: 1-1-2, deviceId: WM-002 }
+                    - { position: 1-1-3, deviceId: WM-003 }
+                    - { position: 1-1-4, deviceId: WM-004 }
+                    - { position: 1-1-5, deviceId: WM-005 }
+            - id: container-antminer
+              name: Antminer
+              model: Bitmain Antminer S21
+              nominalHashrateThs: 200
+              meterDeviceId: null
+              racks:
+                - id: rack-antminer-s21-telemetry-flow
+                  name: Rack 1
+                  sockets:
+                    - { position: 2-1-1, deviceId: AM-001 }
+                    - { position: 2-1-2, deviceId: AM-002 }
+                    - { position: 2-1-3, deviceId: AM-003 }
+            - id: container-sealminer
+              name: SealMiner
+              model: SealMiner A2
+              nominalHashrateThs: 226
+              meterDeviceId: null
+              racks:
+                - id: rack-sealminer-a2-telemetry-flow
+                  name: Rack 1
+                  sockets:
+                    - { position: 3-1-1, deviceId: SM-001 }
+                    - { position: 3-1-2, deviceId: SM-002 }
+      serviceAccount: app:op-center
+      permissionsDigest: a4e71417ef246cf9
+    - name: reporting
+      package: "@tetherto/mdk-app-reporting-tool"
+      config:
+        siteConfig: ./config/reporting/site.json
+        catalogue: ./config/reporting/hardware-catalogue.json
+        sampleIntervalSec: 60
+      serviceAccount: app:reporting
+      permissionsDigest: e3f37e5d5493ef49
+    - name: agent
+      package: "@tetherto/mdk-app-agent"
+      mount: /
+      config:
+        agent:
+          provider: { kind: qvac, model: qwen3-4b, baseURL: "http://127.0.0.1:11500/v1" }
+          mcp: { url: "http://127.0.0.1:3101/mcp" }
+      serviceAccount: app:agent
+      permissionsDigest: 4f53cda18c2baa0c
+  rbac:
+    enforcement: deny
+    roles:
+      - name: admin
+        rules:
+          - resources:
+              - "*"
+            verbs:
+              - "*"
+      - name: gateway
+        rules:
+          - resources:
+              - policy
+            verbs:
+              - read
+      - name: app-op-center
+        rules:
+          - resources:
+              - workers
+            verbs:
+              - list
+          - resources:
+              - devices
+            verbs:
+              - read
+              - write
+      - name: app-reporting
+        rules:
+          - resources:
+              - workers
+            verbs:
+              - list
+              - read
+          - resources:
+              - devices
+            verbs:
+              - read
+      - name: app-site
+        rules:
+          - resources:
+              - workers
+            verbs:
+              - list
+              - read
+          - resources:
+              - devices
+            verbs:
+              - read
+              - write
+      - name: app-demo
+        rules:
+          - resources:
+              - workers
+            verbs:
+              - list
+          - resources:
+              - devices
+            verbs:
+              - read
+    bindings:
+      - role: admin
+        subjects:
+          - kind: ServiceAccount
+            name: mdk-cli
+      - role: gateway
+        subjects:
+          - kind: ServiceAccount
+            name: mdk-gateway
+      - role: gateway
+        subjects:
+          - kind: ServiceAccount
+            name: mdk-mcp
+      - role: app-op-center
+        subjects:
+          - kind: ServiceAccount
+            name: app:op-center
+      - role: app-reporting
+        subjects:
+          - kind: ServiceAccount
+            name: app:reporting
+      - role: app-site
+        subjects:
+          - kind: ServiceAccount
+            name: app:site
+      - role: app-demo
+        subjects:
+          - kind: ServiceAccount
+            name: app:demo
+      - role: admin
+        subjects:
+          - kind: User
+            name: admin

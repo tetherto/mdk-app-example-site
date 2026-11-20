@@ -37,6 +37,8 @@ export default defineConfig({
       "/site": `http://localhost:${apiPort}`,
       // The installed apps' own routes, which the Gateway forwards to each app.
       "/apps": `http://localhost:${apiPort}`,
+      // Sign-in and token refresh.
+      "/auth": `http://localhost:${apiPort}`,
     },
   },
 });

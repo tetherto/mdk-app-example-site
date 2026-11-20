@@ -140,6 +140,25 @@ test('loadSite - adapts an unclassified worker that reports hashrate_rt into min
   t.is(cold.last.snap.config.power_mode, null)
 })
 
+test('loadSite - adapts a contract power meter from its snap channel as the site meter', async (t) => {
+  const snap = { stats: { power_w: 32000, tension_v: 31000 } }
+  const client = fakeClient({
+    workers: [{ workerId: 'satec-powermeter-worker', deviceIds: ['SATEC-001'], deviceFamily: 'power-meter', brand: 'SATEC' }],
+    telemetry: { 'SATEC-001:snap': { deviceId: 'SATEC-001', name: 'snap', value: snap } }
+  })
+
+  t.alike((await loadSite(client)).byFamily, {
+    'power-meter': [{
+      id: 'SATEC-001',
+      code: 'SATEC-001',
+      type: 'powermeter-satec',
+      info: { pos: 'site' },
+      last: { snap },
+      workerId: 'satec-powermeter-worker'
+    }]
+  })
+})
+
 test('loadSite - skips an unclassified worker without hashrate_rt, or whose capabilities fail', async (t) => {
   const client = fakeClient({
     workers: [

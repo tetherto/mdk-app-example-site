@@ -1,11 +1,29 @@
+import { MdkFetchError, passwordAuth } from "@tetherto/mdk-ui-foundation";
+
 import { MINER_POWER_MODES, type MinerFamily } from "./constants";
 import type { History, Miner } from "./types";
 
+// Password sign-in through the Gateway (/auth/login): under spec.rbac every app
+// route needs a signed-in user. The access token is renewed from an httpOnly
+// refresh cookie, on a timer and on a 401.
+export const auth = passwordAuth();
+
 export function get<T>(base: string, path: string) {
-  return fetch(`${base}${path}`).then((r) => {
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json() as Promise<T>;
+  return auth.fetcher<T>(`${base}${path}`);
+}
+
+export function post<T>(base: string, path: string, body: unknown) {
+  return auth.fetcher<T>(`${base}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
   });
+}
+
+// The Gateway and app runtime answer `{ message: "ERR_…" }`.
+export function errorMessage(err: unknown): string {
+  const message = err instanceof MdkFetchError ? (err.body as { message?: unknown } | undefined)?.message : undefined;
+  return typeof message === "string" ? message : ((err as Error)?.message ?? String(err));
 }
 
 // deviceIds are UUIDs — the worker-assigned type (miner-wm/-am/-av…) is the

@@ -28,7 +28,7 @@ import { MinersPage } from "./MinersPage";
 import { PoolsPage } from "./PoolsPage";
 import type { Container, History, Overview, PoolInput } from "./types";
 import { HEALTHY } from "./useMinerRows";
-import { get, powerModesForMiner } from "./utils";
+import { errorMessage, get, post, powerModesForMiner } from "./utils";
 
 function formatStamp(ts: number): string {
   const d = new Date(ts);
@@ -224,17 +224,11 @@ export function SitePage(): JSX.Element {
   async function applyAction() {
     setActionMsg("Dispatching…");
     try {
-      const res = await fetch(`${base}/site/miners/${selectedMiner}/command`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ mode: selectedMode }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.message || `HTTP ${res.status}`);
+      const body = await post<{ status: string }>(base, `/site/miners/${selectedMiner}/command`, { mode: selectedMode });
       setActionMsg(`${selectedMiner} → ${selectedMode} (${body.status})`);
       overview.refetch();
     } catch (err) {
-      setActionMsg(`Failed: ${(err as Error).message}`);
+      setActionMsg(`Failed: ${errorMessage(err)}`);
     }
   }
 
@@ -245,17 +239,11 @@ export function SitePage(): JSX.Element {
     }
     setPoolsMsg("Dispatching…");
     try {
-      const res = await fetch(`${base}/site/miners/${selectedMiner}/pools`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(pool ? { pools: [pool] } : {}),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.message || `HTTP ${res.status}`);
+      const body = await post<{ pools: string[]; status: string }>(base, `/site/miners/${selectedMiner}/pools`, pool ? { pools: [pool] } : {});
       setPoolsMsg(`${selectedMiner} → ${body.pools.join(", ")} (${body.status})`);
       overview.refetch();
     } catch (err) {
-      setPoolsMsg(`Failed: ${(err as Error).message}`);
+      setPoolsMsg(`Failed: ${errorMessage(err)}`);
     }
   }
 

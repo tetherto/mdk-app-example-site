@@ -1,0 +1,7 @@
+{
+  "name": "v1-pool-worker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Runs the EMCD, SpiderPool or Foundry pool worker under `mdk run`: a contract-first plugin around the vendor's own pool service.",
+  "license": "Apache-2.0"
+}
