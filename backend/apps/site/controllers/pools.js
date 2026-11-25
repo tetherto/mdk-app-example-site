@@ -1,9 +1,5 @@
 'use strict'
 
-const path = require('path')
-
-const deploy = require(path.join(__dirname, '..', '..', '..', '..', 'config', 'site.deploy.json'))
-
 // whatsminer API limit
 const MAX_POOLS = 3
 
@@ -20,12 +16,12 @@ const validatePools = (pools) => {
 }
 
 // setupPools via mdkClient → Kernel → miner. Body pools win; otherwise the
-// site default from site.deploy.json worker.pools is applied.
+// site default, this app's `config.defaultPools` in mdk.yaml, is applied.
 //
 // `ctx` is a test-only seam: a real gateway route call always passes just
-// `req`, so this falls through to the plugin's own ambient client
-// (lib/client.js, lazily required so this file stays requirable outside a
-// plugin load — see @tetherto/mdk-gateway/plugin). Tests pass `{ mdkClient }`
+// `req`, so this falls through to the plugin's own ambient client and config
+// (lazily required so this file stays requirable outside a plugin load — see
+// @tetherto/mdk-gateway/plugin). Tests pass `{ mdkClient, defaultPools }`
 // directly instead of loading the plugin.
 module.exports = async (req, ctx) => {
   const mdkClient = ctx === undefined ? require('../lib/client') : ctx.mdkClient
@@ -34,7 +30,8 @@ module.exports = async (req, ctx) => {
   const deviceId = req.params && req.params.deviceId
   if (!deviceId) throw new Error('ERR_DEVICE_ID_REQUIRED')
 
-  const pools = (req.body && req.body.pools) || deploy.worker.pools
+  const defaultPools = ctx === undefined ? require('@tetherto/mdk-gateway/plugin').config.defaultPools : ctx.defaultPools
+  const pools = (req.body && req.body.pools) || defaultPools
   validatePools(pools)
 
   const params = { pools }

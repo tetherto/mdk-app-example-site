@@ -66,6 +66,23 @@ const adaptContractMiners = async (mdkClient, worker) => {
   }))
 }
 
+// A contract power meter (@tetherto/mdk-worker-satec on WorkerRuntimeV2) has
+// no worker-infra surface either. Its `snap` channel answers the legacy
+// snapshot the overview reads.
+// ponytail: a contract carries no position, so every contract meter counts as
+// the site meter; read a position from the device config if a site adds per-container meters.
+const adaptContractMeters = (mdkClient, worker) => Promise.all((worker.deviceIds || []).map(async (deviceId) => {
+  const tel = await mdkClient.pullTelemetry(deviceId, { type: 'snap' }).catch(() => null)
+  return {
+    id: deviceId,
+    code: deviceId,
+    type: `powermeter-${String(worker.brand || '').toLowerCase()}`,
+    info: { pos: 'site' },
+    last: { snap: (tel && tel.value) || {} },
+    workerId: worker.workerId
+  }
+}))
+
 // List workers and classify each by deviceFamily (contract or workerId fallback).
 // One list pull per worker — with { status: true } each thing carries its latest
 // snapshot (thg.last.snap). The minerpool is a scheduler worker with no things.
@@ -93,10 +110,12 @@ const loadSite = async (mdkClient, opts = {}) => {
     if (!family) {
       // No worker-infra surface — fall back to contract classification
       // (rejections mean "not adaptable", same as unknown family before).
-      const adapted = await adaptContractMiners(mdkClient, w).catch(() => null)
+      const adaptedFamily = w.deviceFamily === 'power-meter' ? 'power-meter' : 'miner'
+      const adapt = adaptedFamily === 'power-meter' ? adaptContractMeters : adaptContractMiners
+      const adapted = await adapt(mdkClient, w).catch(() => null)
       if (adapted && adapted.length) {
-        if (!byFamily.miner) byFamily.miner = []
-        byFamily.miner.push(...adapted)
+        if (!byFamily[adaptedFamily]) byFamily[adaptedFamily] = []
+        byFamily[adaptedFamily].push(...adapted)
       }
       return
     }

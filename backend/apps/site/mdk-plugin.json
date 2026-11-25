@@ -122,7 +122,7 @@
           }
         }
       },
-      "description": "Dispatches the setupPools capability command to a single miner through Kernel. Pools from the request body take precedence; with no body the site-wide default from config/site.deploy.json (worker.pools) is applied. The miner reboots to pick up the new pools, so expect it to drop offline briefly.",
+      "description": "Dispatches the setupPools capability command to a single miner through Kernel. Pools from the request body take precedence; with no body the site-wide default, the site app's `defaultPools` config in mdk.yaml, is applied. The miner reboots to pick up the new pools, so expect it to drop offline briefly.",
       "constraints": ["At most 3 pools per miner (whatsminer API limit).", "Each pool needs url and worker_name; appendId=false disables the per-device worker-name suffix."],
       "errors": ["ERR_MDK_CLIENT_UNAVAILABLE", "ERR_DEVICE_ID_REQUIRED", "ERR_INVALID_POOLS"],
       "safety": "write"

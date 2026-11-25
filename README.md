@@ -1,13 +1,12 @@
 # mdk-app-example-site
 
-Example MDK mining site: a gateway, kernel and miner/pool workers (with mock devices) run under PM2, plus a React UI served by the gateway.
+Example MDK mining site, run by the [MDK CLI](https://www.npmjs.com/package/@tetherto/mdk-cli) from one `mdk.yaml`. A single `mdk run` boots the Kernel, the miner, pool and power-meter workers with their mock devices, five Gateway apps and the Gateway, which serves a React UI.
 
 ## Prerequisites
 
 - Node.js **24+** (`node -v`)
 - npm
-- [PM2](https://pm2.keymetrics.io/) installed globally: `npm install -g pm2`
-- Git access to GitHub (several workers are installed from Git repositories)
+- Git access to GitHub (several workers and apps are installed from Git repositories)
 
 ## Setup
 
@@ -15,24 +14,12 @@ Example MDK mining site: a gateway, kernel and miner/pool workers (with mock dev
 npm run setup
 ```
 
-This runs four steps, which you can also run one at a time:
+This runs `scripts/setup.sh`, which does the following:
 
-```sh
-# 1. Create local config files from the committed *.example templates
-#    (config/site.deploy.json, config/devices.json). Existing files are never overwritten.
-npm run setup:config
-
-# 2. Install dependencies
-npm install
-
-# 3. Fetch the SATEC power-meter worker into vendor/mdk-satec (see Dependencies)
-npm run setup:satec
-
-# 4. Build the UI into ui/dist (served by the gateway)
-npm run build:ui
-```
-
-Edit `config/site.deploy.json` to change ports, pools or which PM2 roles run, and `config/devices.json` to change the miners.
+1. Installs the dependencies, including the `mdk` CLI (`@tetherto/mdk-cli`, a dev dependency).
+2. Fetches the SATEC power-meter worker into `vendor/mdk-satec` (see [Dependencies](#dependencies-and-how-they-are-integrated)).
+3. Builds the UI into `ui/dist`.
+4. Writes `MDK_SITE_UI_DIST`, the absolute path of `ui/dist`, to `.env`. The Gateway's `staticRootPath` in `mdk.yaml` reads it.
 
 ## Run
 
@@ -40,90 +27,102 @@ Edit `config/site.deploy.json` to change ports, pools or which PM2 roles run, an
 npm start
 ```
 
-This generates `deploy/ecosystem.config.js` from `config/site.deploy.json` and starts every role (mocks, kernel, workers, site app, gateway, MCP) as a PM2 process. It then waits for the site to respond (usually around 10 seconds) and prints the URL to open, <http://localhost:3000/>.
+This runs `mdk run`, which starts the whole stack in the foreground and stops it on Ctrl+C. The UI is at <http://localhost:3000/>.
 
-Useful commands:
+Every app route needs a signed-in user, because `spec.rbac` in `mdk.yaml` is enforced. Users live in the Kernel, so create one while the stack runs:
 
 ```sh
-pm2 list              # process status
-pm2 logs              # tail logs from all processes
-npm run stop:pm2      # stop and remove all site processes
+npm run mdk -- user add admin --admin
 ```
 
-Runtime data is written to `.site-data/`.
+Then sign in to the UI with that user. The `mdk` CLI uses its own session, from `npm run mdk -- login admin`.
+
+Useful commands, from another terminal:
+
+```sh
+npm run status          # what is running
+npm run mdk -- --help   # every CLI command
+```
+
+Runtime data, keys and the CLI session are written to `.mdk/`.
+
+## Configuration
+
+`mdk.yaml` is the whole site:
+
+| Section | What it sets |
+| --- | --- |
+| `spec.network` | A private HyperDHT bootstrap on `127.0.0.1:49737`, so the site needs no internet access |
+| `spec.gateway` | Port 3000, and the UI served from `ui/dist` |
+| `spec.mcp` | The MCP server on port 3101 (`npm run mcp`) |
+| `spec.workers` | One entry per worker, with its devices and its mock (`config.mock`) |
+| `spec.apps` | The Gateway apps and their config |
+| `spec.rbac` | Roles and bindings. `npm run mdk -- rbac init` grants each app the Kernel access its manifest asks for |
+
+`${NAME}` in `mdk.yaml` is read from `.env` or the environment. A device's `opts` reach both the worker and its mock, so they carry the worker's `address` and the mock's `host` and `state`. To change the miners, edit their `devices` and the Operation Center `layout` that places them.
 
 ## Dependencies and how they are integrated
 
-Everything is wired together from `config/site.deploy.json`. Each entry in `pm2.roles` becomes one PM2 process running `deploy/run-process.js --role <role>`.
-
-### MDK platform (npm, `0.13.0`)
+### MDK platform (npm, `0.14.0`)
 
 | Package | Used for |
 | --- | --- |
-| `@tetherto/mdk-kernel`, `@tetherto/mdk-core` | Kernel role: device registry, access policy, local discovery through `.site-data/` |
-| `@tetherto/mdk-worker` | Base for the miner, pool and power-meter workers |
-| `@tetherto/mdk-gateway` | HTTP gateway on port 3000. Serves the UI from `ui/dist` and each app's routes |
-| `@tetherto/mdk-app-runtime` | Runs each gateway app in its own `app-<name>` process |
-| `@tetherto/mdk-identity`, `@tetherto/mdk-rbac` | Keypairs, and the Kernel service account and grant `app:<name>` for each app |
-| `@tetherto/mdk-client` | Kernel RPC client used by the site MCP plugin (`backend/mcp-plugins/site`) |
-| `@tetherto/mdk-mcp` | `mcp` role: exposes the apps' routes as MCP tools (see below) |
-| `@tetherto/mdk-ui-foundation`, `@tetherto/mdk-react-adapter`, `@tetherto/mdk-react-devkit` | UI building blocks, and hosting the apps' UI modules |
+| `@tetherto/mdk-cli` | `mdk run`, `mdk user`, `mdk rbac`, `mdk status`. It brings the Kernel, Gateway, app runtime, MCP server, identity and RBAC packages |
+| `@tetherto/mdk-worker` | The worker runtime: the pool bridge (`workers/v1-pool`) and its test use it |
+| `@tetherto/mdk-core`, `@tetherto/mdk-kernel` | Peer dependencies of the EMCD, SpiderPool and Foundry workers, through `lib/mdk-compat` |
+| `@tetherto/mdk-ui-foundation`, `@tetherto/mdk-react-adapter`, `@tetherto/mdk-react-devkit` | UI building blocks, sign-in, and hosting the apps' UI modules |
 
 ### Device workers and mocks
 
-Third-party workers are installed from Git, each pinned to a commit. A worker adapter in `backend/adapters/` or a role function in `backend/site.js` starts each one. Each worker has a matching `mocks-*` role that runs the vendor's bundled mock server, so no real hardware is needed. The devices themselves are listed in `config/devices.json`.
+Third-party workers are installed from Git, each pinned to a commit. Each one runs its vendor's bundled mock, so no real hardware is needed.
 
-| Dependency | Kind | Roles |
+| Worker (`spec.workers`) | Package | Kind |
 | --- | --- | --- |
-| `whatsminer-mdk-worker` | Miner (WhatsMiner) | `mocks`, `worker` |
-| `antminer-mdk-worker` | Miner (Antminer) | `mocks-antminer`, `worker-antminer` |
-| `sealminer-mdk-worker` | Miner (SealMiner) | `mocks-sealminer`, `worker-sealminer` |
-| `ocean-mdk-worker` | Pool (OCEAN) | `mocks-ocean`, `worker-ocean` |
-| `emcd-mdk-worker`, `spiderpool-mdk-worker`, `foundry-mdk-worker` | Pools | `mocks-<pool>`, `worker-<pool>` |
-| `@tetherto/mdk-worker-satec` (vendored, see below) | Power meter (SATEC PM180, device `SATEC-001`) | `mocks-satec`, `worker-satec` |
+| `whatsminer-m56s-telemetry-flow` | `whatsminer-mdk-worker` | Miner (WhatsMiner M56S) |
+| `antminer-s21-telemetry-flow` | `antminer-mdk-worker` | Miner (Antminer S21) |
+| `sealminer-a2-telemetry-flow` | `sealminer-mdk-worker` | Miner (SealMiner A2) |
+| `ocean-pool-worker` | `ocean-mdk-worker` | Pool (OCEAN) |
+| `emcd-pool-worker`, `spiderpool-pool-worker`, `foundry-pool-worker` | `./workers/v1-pool` | Pools (EMCD, SpiderPool, Foundry) |
+| `satec-powermeter-worker` | `./vendor/mdk-satec/…/satec` (fetched, see below) | Power meter (SATEC PM180, device `SATEC-001`) |
 
-**SATEC power meter.** The SATEC worker lives in a subfolder of the [tetherto/mdk](https://github.com/tetherto/mdk) monorepo. It isn't published to npm, and it requires files outside its own folder, so it can't be a `package.json` dependency. Instead, `npm run setup:satec` (`deploy/fetch-satec.js`) does the following:
+**EMCD, SpiderPool and Foundry pools.** These workers' handlers read a pool service the host passes in, which `mdk.yaml` cannot carry. `workers/v1-pool` is a small worker plugin that builds that service for its device (`opts.kind` picks the vendor), polls it every `opts.tickMs`, and publishes `hashrate`, `workers_online`, `balance`, `estimated_earnings`, `stats` and `stats_history`. Its mock starts the vendor's own pool API mock. For a real pool, set `apiUrl`, turn `mock` off, and pass the credentials in the worker's `env` (`EMCD_API_KEY`/`EMCD_API_SECRET`, `SPIDERPOOL_ACCESS_KEY`/`SPIDERPOOL_PRIVATE_KEY`, `FOUNDRY_API_KEY`). Without them, the vendor's mock keys are used.
 
-1. Downloads the tetherto/mdk release tarball whose tag matches the installed `@tetherto/mdk-core` version.
-2. Extracts the worker and the paths it needs (`backend/core`, `backend/workers/mock`, the root `package.json` and `package-lock.json`) into `vendor/mdk-satec/`. This folder is gitignored.
-3. Installs that workspace there.
+**SATEC power meter.** The SATEC worker lives in a subfolder of the [tetherto/mdk](https://github.com/tetherto/mdk) monorepo. It isn't published to npm, and its mock requires files outside its own folder, so it can't be a `package.json` dependency. Instead, `npm run setup:satec` (`scripts/fetch-satec.js`) does the following:
 
-The step is skipped when the vendored copy already matches the installed MDK version. Pass `--force` to fetch again anyway. If the copy is missing, the SATEC roles fail with `ERR_SATEC_MISSING`. The mock meter listens from port 18020 (`satec.mocks.portBase`).
+1. Downloads the tetherto/mdk release tarball whose tag matches the installed `mdk` CLI.
+2. Extracts the worker, the shared mock package (`backend/workers/mock`) and the root `package.json` and `package-lock.json` into `vendor/mdk-satec/`. This folder is gitignored.
+3. Installs those two workspaces there.
+
+The step is skipped when the vendored copy already matches the CLI version. Pass `--force` to fetch again anyway.
 
 **Local shims (`lib/`)**, installed as `file:` dependencies:
 
-- `lib/mdk-compat`: stands in for `@tetherto/mdk`, the monorepo that the emcd, spiderpool and foundry workers expect as a peer dependency. It re-exports this site's MDK packages (see its README).
+- `lib/mdk-compat`: stands in for `@tetherto/mdk`, the monorepo that the EMCD, SpiderPool and Foundry workers expect as a peer dependency. It re-exports this site's MDK packages (see its README).
 - `lib/mdk-crypto-lib`: replaces `crypto-js` through `overrides`, using Node's crypto for the AES and SHA-256 calls that `whatsminer-mdk-worker` makes.
 
 ### Gateway apps
 
-Apps are listed in `gateway.pluginDirs` (resolved by `deploy/apps.js`). Each app gets the following:
+Each entry in `spec.apps` runs in its own app runtime, under a Kernel service account `app:<name>`, with its routes under `/apps/<name>/…` unless it sets `mount`. Its `config` is the operator config the app reads.
 
-- its own `app-<name>` PM2 role, which must also be listed in `pm2.roles`;
-- a Kernel service account `app:<name>`;
-- its routes under `/apps/<name>/…`, unless it sets `mount`;
-- an operator config from the entry's `config`.
-
-| Entry | Source | Mount | What it does |
+| App | Source | Mount | What it does |
 | --- | --- | --- | --- |
-| `site` | `backend/apps/site` (local) | `/` | The site's own API (`/site/…`): overview, containers, history and pools for the main UI |
+| `site` | `backend/apps/site` (local) | `/` | The site's own API (`/site/…`): overview, history, pools and miner commands for the main UI. `config.defaultPools` is what `POST /site/miners/:deviceId/pools` applies without a body |
 | `demo` | `@tetherto/mdk-app-demo` | `/apps/demo` | Aggregates live and historical telemetry across miners |
 | `op-center` | `@tetherto/mdk-app-operation-center` | `/apps/op-center` | Operation Center: dashboard, explorer and miner commands. `config.layout` maps the miners into containers and racks |
 | `reporting` | `@tetherto/mdk-app-reporting-tool` | `/apps/reporting` | Reporting Tool: hashrate, power, efficiency and pool reports. Reads `config/reporting/site.json` (mining units, the site meter `SATEC-001`, the pool) and `config/reporting/hardware-catalogue.json` (nominal hashrate and power per model) |
-| `agent` | `@tetherto/mdk-app-agent` | `/` | Agent chat sessions. `mcp: false` keeps its routes off the MCP tool list |
+| `agent` | `@tetherto/mdk-app-agent` | `/` | Agent chat sessions over the MCP server |
 
 The app packages are installed from Git refs (see `package.json`). To try a local checkout, point the dependency at it with `file:../<repo>` and run `npm install`.
 
 To add an app:
 
 1. Install its package.
-2. Add a `gateway.pluginDirs` entry.
-3. Add `app-<name>` to `pm2.roles`.
-4. Run `npm start`.
+2. Run `npm run mdk -- add app <package>`, or add a `spec.apps` entry by hand and run `npm run mdk -- rbac init`.
+3. Restart `npm start`.
 
 ### UI integration
 
-The site UI (`ui/`, Vite and React, using a hash router) bundles the UI modules of the apps that ship one. Today these are the Operation Center and the Reporting Tool. `ui/src/installedApps.tsx` sets this up:
+The site UI (`ui/`, Vite and React, using a hash router) signs in through the Gateway (`passwordAuth`), then shows the site pages and bundles the UI modules of the apps that ship one. Today these are the Operation Center and the Reporting Tool. `ui/src/installedApps.tsx` sets this up:
 
 - It imports each app's `ui/index.js` (built with `defineMdkApp`), its `ui/style.css` and its `package.json` version.
 - It validates each module with `checkAppUiModule`, the same check the MDK dashboard runs.
@@ -136,7 +135,7 @@ A few settings make the bundling work:
 - `ui/src/main.tsx` registers the Chart.js `BarController` and `LineController`, which the Reporting Tool's mixed charts need.
 - `ui/src/installedApps.css` hides the Operation Center's own stats strip, because the site header already shows Miners, Hashrate, Consumption and Efficiency.
 
-To show another app's UI, import it in `installedApps.tsx`, add it to `INSTALLED_APPS` and give it an icon in `AppSidebar.tsx`. The `name` must match its `gateway.pluginDirs` entry. Then rebuild with `npm run build:ui`.
+To show another app's UI, import it in `installedApps.tsx`, add it to `INSTALLED_APPS` and give it an icon in `AppSidebar.tsx`. The `name` must match its `spec.apps` entry. Then rebuild with `npm run build:ui`.
 
 ### Lockfiles
 
@@ -144,13 +143,13 @@ Only the root `package-lock.json` is committed. `vendor/mdk-satec/package-lock.j
 
 ## UI development
 
-With the backend running (`npm start`), start the Vite dev server with hot reload:
+With the stack running (`npm start`), start the Vite dev server with hot reload:
 
 ```sh
 npm run dev:ui
 ```
 
-Open <http://localhost:3040/>. Requests to `/site` and `/apps` are proxied to the gateway on port 3000.
+Open <http://localhost:3040/>. Requests to `/site`, `/apps` and `/auth` are proxied to the Gateway on port 3000.
 
 ## Checks
 
@@ -160,15 +159,9 @@ npm run lint          # standard
 npm test              # unit tests
 ```
 
-The agent tool-contract checks in `tests/unit/site-tools-*.test.js` need the MDK repository's private agent package, so they are skipped by default. To run them, point `MDK_REPO` at an MDK checkout:
-
-```sh
-MDK_REPO=../mdk npm test
-```
-
 ## MCP agent tools (optional)
 
-The `mcp` role serves site tools at `http://127.0.0.1:3101/mcp`. To use them from Claude Code, copy the example config:
+`npm run mcp` serves the apps' routes as MCP tools at `http://127.0.0.1:3101/mcp`. To use them from Claude Code, copy the example config:
 
 ```sh
 cp .mcp.json.example .mcp.json

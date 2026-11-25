@@ -1,0 +1,59 @@
+{
+  "metadata": {
+    "provider": "v1-pool",
+    "deviceFamily": "minerpool",
+    "brand": "EMCD, SpiderPool or Foundry",
+    "modelsSupported": ["EMCD-BTC", "SPIDERPOOL-BTC", "FOUNDRY-BTC"],
+    "overview": "One mining pool account set, read through the pool's own API by the vendor worker's pool service (device opt `kind`: emcd, spiderpool or foundry)."
+  },
+  "capabilities": {
+    "telemetry": [
+      {
+        "name": "hashrate",
+        "unit": "H/s",
+        "type": "number",
+        "handler": "src/telemetry/hashrate.js",
+        "description": "Current pool-side hashrate across configured accounts."
+      },
+      {
+        "name": "workers_online",
+        "unit": "",
+        "type": "number",
+        "handler": "src/telemetry/workers-online.js",
+        "description": "Active workers across configured accounts."
+      },
+      {
+        "name": "balance",
+        "unit": "BTC",
+        "type": "number",
+        "handler": "src/telemetry/balance.js",
+        "description": "Mining balance across configured accounts."
+      },
+      {
+        "name": "estimated_earnings",
+        "unit": "BTC",
+        "type": "number",
+        "handler": "src/telemetry/estimated-earnings.js",
+        "description": "Previous UTC day mining earnings, used as an estimate for today."
+      },
+      {
+        "name": "stats",
+        "unit": "",
+        "type": "object",
+        "handler": "src/telemetry/stats.js",
+        "description": "Per-account rows of the last poll: { ts, stats: [{ username, hashrate, balance, ... }] }."
+      },
+      {
+        "name": "stats_history",
+        "unit": "",
+        "type": "array",
+        "handler": "src/telemetry/stats-history.js",
+        "description": "Stored polls between `start` and `end` (ms): [{ ts, stats: [...] }]."
+      }
+    ],
+    "commands": [],
+    "errors": {
+      "E_POOL_API": "Pool REST API request failed"
+    }
+  }
+}

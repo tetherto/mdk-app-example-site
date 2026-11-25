@@ -1,0 +1,7 @@
+{
+  "name": "site",
+  "version": "0.0.1",
+  "private": true,
+  "description": "The example site's own app: overview, history, pools and miner commands for the site UI.",
+  "license": "Apache-2.0"
+}

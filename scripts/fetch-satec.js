@@ -5,11 +5,11 @@
 //
 // It can't be a package.json dependency: it isn't published to npm, npm can't
 // install one folder of a git repo, and the worker requires files outside its
-// own folder by relative path (the mock base classes in backend/workers/mock,
-// and backend/core). So this takes those paths, plus the monorepo's root
-// package.json and lockfile to install them, from the github.com/tetherto/mdk
-// release tag matching the installed @tetherto/mdk-core, and installs the
-// worker's workspace there. Same approach as mdk-app-reporting-tool's setup.
+// own folder by relative path (the mock base classes in backend/workers/mock).
+// So this takes those paths, plus the monorepo's root package.json and lockfile
+// to install them, from the github.com/tetherto/mdk release tag matching the
+// installed mdk CLI, and installs the two workspaces there. mdk.yaml points
+// `spec.workers` at the result. Same approach as mdk-app-reporting-tool's setup.
 //
 // Re-fetches only when the vendored copy is missing or from another MDK
 // version; pass --force to fetch again anyway.
@@ -26,12 +26,11 @@ const VERSION_FILE = path.join(SATEC_ROOT, '.mdk-version')
 const SATEC_PATHS = [
   'package.json',
   'package-lock.json',
-  'backend/core',
   'backend/workers/mock',
   'backend/workers/power-meter/satec'
 ]
 
-const mdkVersion = () => require('@tetherto/mdk-core/package.json').version
+const mdkVersion = () => require('@tetherto/mdk-cli/package.json').version
 
 const isInstalled = (version) =>
   fs.existsSync(path.join(SATEC_ROOT, 'node_modules')) &&
@@ -68,8 +67,7 @@ const fetchSatec = async ({ force = false, log = console.log } = {}) => {
   execFileSync(npm, [
     ...npmPre, 'install',
     '-w', '@tetherto/mdk-worker-satec',
-    '-w', '@tetherto/mdk-core',
-    '-w', '@tetherto/mdk-worker',
+    '-w', '@tetherto/mdk-worker-mock',
     '--ignore-scripts', '--no-audit', '--no-fund'
   ], { cwd: SATEC_ROOT, stdio: 'inherit' })
 
